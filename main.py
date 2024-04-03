@@ -49,6 +49,8 @@ async def get_current_user(token: str = Depends(oath2_scheme)):
 @app.post("/user/me")
 async def user_login(user: user_pydanticIn = Depends(get_current_user)):
     business = await Business.get(owner = user)
+    logo = business.logo
+    logo = "localhost:8000/static/images/"+logo
     return {
         "status": "ok",
         "data": 
@@ -56,7 +58,8 @@ async def user_login(user: user_pydanticIn = Depends(get_current_user)):
             "username": user.username,
             "email": user.email,
             "verified": user.is_verified,
-            "joined date": user.join_date.strftime("%b %d %Y")
+            "joined date": user.join_date.strftime("%b %d %Y"),
+            "logo": logo
         }
     }
 
@@ -186,6 +189,63 @@ async def create_upload_file(id: int, file: UploadFile = File(...),
     file_url = "localhost:8000" + generated_name[1:]
     return {"status": "ok", "filename": file_url}
     
+@app.post("/products")
+async def add_new_product(product: product_pydanticIn, 
+                            user: user_pydantic = Depends(get_current_user)):
+    product = product.dict(exclude_unset = True)
+    
+    if product['original_price'] > 0:
+        product["percentage_discount"] = ((product["original_price"] - product['new_price'] )/ product['original_price']) * 100
+
+    product_obj = await Product.create(**product, business = user)
+    product_obj = await product_pydantic.from_tortoise_orm(product_obj)
+    return {"status" : "ok", "data" : product_obj}
+
+
+@app.get("/products")
+async def get_products():
+    response = await product_pydantic.from_queryset(Product.all())
+    return {"status" : "ok", "data" : response}
+
+
+@app.get("/products/{id}")
+async def specific_product(id: int):
+    product = await Product.get(id = id)
+    business = await product.business
+    owner = await business.owner
+    response = await product_pydantic.from_queryset_single(Product.get(id = id))
+    print(type(response))
+    return {"status" : "ok",
+            "data" : 
+                    {
+                    "product_details" : response,
+                    "business_details" : {
+                    "name" : business.business_name,
+                    "city" : business.city,
+                    "region" : business.region,
+                    "description" : business.business_description,
+                    "logo" : business.logo,
+                    "owner_id" : owner.id,
+                    "email" : owner.email,
+                    "join_date" :  owner.join_date.strftime("%b %d %Y")
+                        }
+                    }
+            }
+
+@app.delete("/products/{id}")
+async def delete_product(id: int, user: user_pydantic = Depends(get_current_user)):
+    product = await Product.get(id = id)
+    business =  await product.business
+    owner = await business.owner
+    if user == owner:
+        product.delete()
+    else:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED, 
+            detail = "Not authenticated to perform this action",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"status" : "ok"}
 
 register_tortoise(
     app,
