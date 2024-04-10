@@ -30,6 +30,7 @@ class Product(Model):
     offer_expiration_date = fields.DateField(default = datetime.utcnow)
     product_image = fields.CharField(max_length=200, null = False, default = "productDefault.jpg")
     business = fields.ForeignKeyField("models.Business", related_name="products")
+    date_published = fields.DatetimeField(default = datetime.utcnow)
 
 user_pydantic = pydantic_model_creator(User, name ="User", exclude=("is_verified",))
 user_pydanticIn = pydantic_model_creator(User, name = "UserIn", exclude_readonly = True, exclude=("is_verified", 'join_date'))
