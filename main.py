@@ -247,6 +247,30 @@ async def delete_product(id: int, user: user_pydantic = Depends(get_current_user
         )
     return {"status" : "ok"}
 
+@app.put("/product/{id}")
+async def update_product(id: int, update_info: product_pydanticIn, user: user_pydantic = Depends(get_current_user)):
+    product = await Product.get(id=id)
+    business = await product.business
+    owner = await business.owner
+
+    update_info = update_info.dict(exclude_unset = True)
+    update_info["date_published"] =  datetime.utcnow()
+    if user == owner and update_info["original_price"]>0:
+        update_info["percentage_discount"] = ((update_info["original_price"] - update_info["new_price"])/update_info["original_price"])*100
+        
+        product = await product.update_from_dict(update_info)
+        await product.save()
+        response = await product_pydantic.from_tortoise_orm(product)
+        return {"status": "ok", "date": response}
+    
+    else:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED, 
+            detail = "Not authenticated to perform this action",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 register_tortoise(
     app,
     db_url="sqlite://database.sqlite3",
